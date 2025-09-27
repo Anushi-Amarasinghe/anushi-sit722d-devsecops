@@ -1,0 +1,174 @@
+# Prometheus ServiceMonitor for custom metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ecommerce-services
+  namespace: production
+  labels:
+    app: ecommerce
+spec:
+  selector:
+    matchLabels:
+      app: customer-service
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ecommerce-order-service
+  namespace: production
+  labels:
+    app: ecommerce
+spec:
+  selector:
+    matchLabels:
+      app: order-service
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ecommerce-product-service
+  namespace: production
+  labels:
+    app: ecommerce
+spec:
+  selector:
+    matchLabels:
+      app: product-service
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+---
+# Grafana Dashboard ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-ecommerce
+  namespace: production
+  labels:
+    grafana_dashboard: "1"
+data:
+  ecommerce-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "E-commerce Application Dashboard",
+        "tags": ["ecommerce", "microservices"],
+        "style": "dark",
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Service Health",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "up{job=\"customer-service\"}",
+                "legendFormat": "Customer Service"
+              },
+              {
+                "expr": "up{job=\"order-service\"}",
+                "legendFormat": "Order Service"
+              },
+              {
+                "expr": "up{job=\"product-service\"}",
+                "legendFormat": "Product Service"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(http_requests_total[5m])",
+                "legendFormat": "{{service}} - {{method}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Response Time",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+                "legendFormat": "95th percentile"
+              },
+              {
+                "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket[5m]))",
+                "legendFormat": "50th percentile"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Error Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(http_requests_total{status=~\"5..\"}[5m])",
+                "legendFormat": "{{service}} - 5xx errors"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }
+---
+# PrometheusRule for alerting
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ecommerce-alerts
+  namespace: production
+  labels:
+    app: ecommerce
+spec:
+  groups:
+  - name: ecommerce.rules
+    rules:
+    - alert: ServiceDown
+      expr: up{job=~"customer-service|order-service|product-service"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Service {{ $labels.job }} is down"
+        description: "Service {{ $labels.job }} has been down for more than 1 minute."
+    
+    - alert: HighErrorRate
+      expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+      for: 2m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High error rate for {{ $labels.job }}"
+        description: "Error rate is above 10% for {{ $labels.job }}"
+    
+    - alert: HighResponseTime
+      expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High response time for {{ $labels.job }}"
+        description: "95th percentile response time is above 1 second for {{ $labels.job }}"

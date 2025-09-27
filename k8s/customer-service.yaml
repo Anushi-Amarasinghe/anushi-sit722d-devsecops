@@ -20,6 +20,25 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 8002
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8002
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8002
+          initialDelaySeconds: 5
+          periodSeconds: 5
         env:
         - name: POSTGRES_HOST
           value: customer-db-service-d-aks
