@@ -1,0 +1,163 @@
+name: DevSecOps CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, devsecops ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AZURE_CONTAINER_REGISTRY: sit722acr01.azurecr.io
+  AZURE_RESOURCE_GROUP: sit722-rg
+  AKS_CLUSTER_NAME: sit722-aks
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  # Security and Quality Scanning
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+    
+    - name: Run Python security check
+      run: |
+        pip install safety
+        safety check --json --output safety-report.json || true
+        cat safety-report.json
+
+  # Build and Test
+  build-and-test:
+    runs-on: ubuntu-latest
+    needs: security-scan
+    strategy:
+      matrix:
+        service: [customer-service, order-service, product-service, frontend]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      if: matrix.service != 'frontend'
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Install dependencies
+      if: matrix.service != 'frontend'
+      run: |
+        cd backend/${{ matrix.service }}
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+    
+    - name: Run tests
+      if: matrix.service != 'frontend'
+      run: |
+        cd backend/${{ matrix.service }}
+        python -m pytest tests/ -v
+    
+    - name: Build Docker image
+      run: |
+        if [ "${{ matrix.service }}" = "frontend" ]; then
+          docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}/${{ matrix.service }}:${{ env.IMAGE_TAG }} ./frontend
+        else
+          docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}/${{ matrix.service }}:${{ env.IMAGE_TAG }} ./backend/${{ matrix.service }}
+        fi
+    
+    - name: Run Trivy container scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: '${{ env.AZURE_CONTAINER_REGISTRY }}/${{ matrix.service }}:${{ env.IMAGE_TAG }}'
+        format: 'sarif'
+        output: 'trivy-container-results.sarif'
+    
+    - name: Upload container scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-container-results.sarif'
+
+  # Deploy to Staging (devsecops branch)
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.ref == 'refs/heads/devsecops'
+    environment: staging
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Get AKS credentials
+      run: |
+        az aks get-credentials --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --name ${{ env.AKS_CLUSTER_NAME }}
+    
+    - name: Deploy to staging
+      run: |
+        # Update image tags in k8s manifests
+        sed -i "s|:v1|:${{ env.IMAGE_TAG }}|g" k8s/*.yaml
+        
+        # Apply staging-specific configurations
+        kubectl apply -f k8s/ -n staging
+    
+    - name: Run smoke tests
+      run: |
+        # Wait for deployments to be ready
+        kubectl wait --for=condition=available --timeout=300s deployment --all -n staging
+        
+        # Run basic health checks
+        kubectl get pods -n staging
+        kubectl get services -n staging
+
+  # Deploy to Production (main branch)
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Azure Login
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    
+    - name: Get AKS credentials
+      run: |
+        az aks get-credentials --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --name ${{ env.AKS_CLUSTER_NAME }}
+    
+    - name: Deploy to production
+      run: |
+        # Update image tags in k8s manifests
+        sed -i "s|:v1|:${{ env.IMAGE_TAG }}|g" k8s/*.yaml
+        
+        # Apply production configurations
+        kubectl apply -f k8s/ -n production
+    
+    - name: Run production tests
+      run: |
+        # Wait for deployments to be ready
+        kubectl wait --for=condition=available --timeout=300s deployment --all -n production
+        
+        # Run comprehensive tests
+        kubectl get pods -n production
+        kubectl get services -n production

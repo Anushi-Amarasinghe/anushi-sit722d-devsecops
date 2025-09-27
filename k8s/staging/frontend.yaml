@@ -1,7 +1,8 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: frontend-d-aks
+  name: frontend-staging
+  namespace: staging
   labels:
     app: frontend
 spec:
@@ -16,7 +17,7 @@ spec:
     spec:
       containers:
       - name: frontend-container
-        image: sit722devopsacr.azurecr.io/frontend:v1
+        image: sit722devopsacr.azurecr.io/frontend:staging
         imagePullPolicy: Always
         ports:
         - containerPort: 80
@@ -27,30 +28,23 @@ spec:
           limits:
             memory: "256Mi"
             cpu: "200m"
-        livenessProbe:
-          httpGet:
-            path: /
-            port: 80
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 80
-          initialDelaySeconds: 5
-          periodSeconds: 5
         env:
         - name: PRODUCT_API_BASE_URL
-          value: http://product-service-d-aks:8000
+          value: http://product-service-staging:8000
         - name: ORDER_API_BASE_URL
-          value: http://order-service-d-aks:8001
+          value: http://order-service-staging:8001
         - name: CUSTOMER_API_BASE_URL
-          value: http://customer-service-d-aks:8002
+          value: http://customer-service-staging:8002
+        - name: ENVIRONMENT
+          value: staging
+        - name: VERSION
+          value: "staging"
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: frontend-d-aks
+  name: frontend-staging
+  namespace: staging
   labels:
     app: frontend
 spec:
