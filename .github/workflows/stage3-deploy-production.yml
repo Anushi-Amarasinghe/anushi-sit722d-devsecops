@@ -1,0 +1,81 @@
+name: Stage 3 CD Pipeline - Deploy to Production
+
+# Trigger on push to main (post-PR merge)
+on:
+  push:
+    branches: [ main ]
+
+env:
+  ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
+  PROD_NAMESPACE: production
+
+jobs:
+  deploy_production:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set AKS context (production cluster)
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
+          cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
+
+      - name: Ensure production namespace exists
+        run: |
+          kubectl create namespace ${{ env.PROD_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply infrastructure (ConfigMaps, Secrets, DBs, RabbitMQ)
+        run: |
+          NS=${{ env.PROD_NAMESPACE }}
+          kubectl apply -n "$NS" -f k8s/configmaps.yaml
+          kubectl apply -n "$NS" -f k8s/secrets.yaml
+          kubectl apply -n "$NS" -f k8s/rabbitmq.yaml
+          kubectl apply -n "$NS" -f k8s/product-db.yaml
+          kubectl apply -n "$NS" -f k8s/order-db.yaml
+          kubectl apply -n "$NS" -f k8s/customer-db.yaml
+
+      - name: Apply services and frontend
+        run: |
+          NS=${{ env.PROD_NAMESPACE }}
+          kubectl apply -n "$NS" -f k8s/product-service.yaml
+          kubectl apply -n "$NS" -f k8s/order-service.yaml
+          kubectl apply -n "$NS" -f k8s/customer-service.yaml
+          kubectl apply -n "$NS" -f k8s/frontend.yaml
+
+      - name: Set images to ACR :latest
+        run: |
+          NS=${{ env.PROD_NAMESPACE }}
+          ACR=${{ env.ACR_LOGIN_SERVER }}
+          kubectl -n "$NS" set image deploy/product-service-d-aks  product-service-container=$ACR/product_service:latest
+          kubectl -n "$NS" set image deploy/order-service-d-aks    order-service-container=$ACR/order_service:latest
+          kubectl -n "$NS" set image deploy/customer-service-d-aks customer-service-container=$ACR/customer_service:latest
+          kubectl -n "$NS" set image deploy/frontend-d-aks         frontend-container=$ACR/frontend:latest
+
+      - name: Wait for services ready
+        run: |
+          NS=${{ env.PROD_NAMESPACE }}
+          kubectl -n "$NS" rollout status deploy/product-service-d-aks   --timeout=420s
+          kubectl -n "$NS" rollout status deploy/order-service-d-aks     --timeout=420s
+          kubectl -n "$NS" rollout status deploy/customer-service-d-aks  --timeout=420s
+          kubectl -n "$NS" rollout status deploy/frontend-d-aks          --timeout=420s
+
+      - name: Smoke test
+        run: |
+          NS=${{ env.PROD_NAMESPACE }}
+          kubectl -n "$NS" run smoke --rm -i --restart=Never --image=curlimages/curl:8.8.0 -- \
+            sh -eu -c '
+              check_200(){ url="$1"; name="$2"; code=$(curl -sS -o /dev/null -w "%{http_code}" "$url" || true); if [ "$code" != "200" ]; then echo "[FAIL] $name -> $code ($url)"; exit 1; fi; echo "[OK] $name"; }
+              check_200 http://product-service-d-aks:8000/health   "product /health"
+              check_200 http://order-service-d-aks:8001/health     "order /health"
+              check_200 http://customer-service-d-aks:8002/health  "customer /health"
+            '
+
+
