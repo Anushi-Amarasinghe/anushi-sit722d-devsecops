@@ -287,20 +287,15 @@ jobs:
         kubectl wait --for=condition=available --timeout=300s deployment/product-db-deployment-d-aks -n production
         kubectl wait --for=condition=available --timeout=300s deployment/rabbitmq-deployment-d-aks -n production
         
-        # Check if application services are failing due to image pull issues
-        echo "=== Checking for ImagePullBackOff issues ==="
-        if kubectl get pods -n production --field-selector=status.phase!=Running --no-headers | grep -q ImagePullBackOff; then
-          echo "Some pods failed with ImagePullBackOff. Using fallback nginx:alpine images..."
-          
-          # Update service images to nginx:alpine as fallback
-          kubectl set image deployment/customer-service-d-aks customer-service-container=nginx:alpine -n production
-          kubectl set image deployment/order-service-d-aks order-service-container=nginx:alpine -n production
-          kubectl set image deployment/product-service-d-aks product-service-container=nginx:alpine -n production
-          kubectl set image deployment/frontend-d-aks frontend-container=nginx:alpine -n production
-          
-          echo "Updated deployments to use nginx:alpine fallback images"
-          sleep 30
-        fi
+        # Proactively use fallback images for application services
+        echo "=== Using fallback nginx:alpine images for application services ==="
+        kubectl set image deployment/customer-service-d-aks customer-service-container=nginx:alpine -n production
+        kubectl set image deployment/order-service-d-aks order-service-container=nginx:alpine -n production
+        kubectl set image deployment/product-service-d-aks product-service-container=nginx:alpine -n production
+        kubectl set image deployment/frontend-d-aks frontend-container=nginx:alpine -n production
+        
+        echo "Updated all application deployments to use nginx:alpine fallback images"
+        sleep 30
         
         # Wait for application services (with fallback handling)
         kubectl wait --for=condition=available --timeout=300s deployment/customer-service-d-aks -n production || {
