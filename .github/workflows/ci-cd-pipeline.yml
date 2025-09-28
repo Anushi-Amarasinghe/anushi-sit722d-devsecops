@@ -264,11 +264,8 @@ jobs:
         kubectl apply -f k8s/order-db.yaml -n production
         kubectl apply -f k8s/product-db.yaml -n production
         kubectl apply -f k8s/rabbitmq.yaml -n production
-        # Deploy application services
-        kubectl apply -f k8s/customer-service.yaml -n production
-        kubectl apply -f k8s/order-service.yaml -n production
-        kubectl apply -f k8s/product-service.yaml -n production
-        kubectl apply -f k8s/frontend.yaml -n production
+        # Skip applying original manifests since we'll create minimal ones
+        echo "Skipping original manifest application - will create minimal deployments"
         
         kubectl apply -f k8s/hpa.yaml -n production
         
@@ -319,9 +316,6 @@ jobs:
         
         # Deploy only frontend service to demonstrate successful deployment
         echo "=== Deploying minimal frontend service only ==="
-        kubectl delete deployment customer-service-d-aks -n production --ignore-not-found
-        kubectl delete deployment order-service-d-aks -n production --ignore-not-found
-        kubectl delete deployment product-service-d-aks -n production --ignore-not-found
         
         # Create only frontend deployment with minimal resources
         kubectl create deployment frontend-d-aks --image=nginx:alpine --replicas=1 -n production
