@@ -284,20 +284,8 @@ jobs:
         kubectl wait --for=condition=available --timeout=300s deployment/product-db-deployment-d-aks -n production
         kubectl wait --for=condition=available --timeout=300s deployment/rabbitmq-deployment-d-aks -n production
         
-        # Proactively use fallback images for application services
-        echo "=== Using fallback nginx:alpine images for application services ==="
-        kubectl set image deployment/customer-service-d-aks customer-service-container=nginx:alpine -n production
-        kubectl set image deployment/order-service-d-aks order-service-container=nginx:alpine -n production
-        kubectl set image deployment/product-service-d-aks product-service-container=nginx:alpine -n production
-        kubectl set image deployment/frontend-d-aks frontend-container=nginx:alpine -n production
-        
-        # Remove health checks for nginx fallback images
-        kubectl patch deployment customer-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"customer-service-container","livenessProbe":null,"readinessProbe":null}]}}}}'
-        kubectl patch deployment order-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"order-service-container","livenessProbe":null,"readinessProbe":null}]}}}}'
-        kubectl patch deployment product-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"product-service-container","livenessProbe":null,"readinessProbe":null}]}}}}'
-        kubectl patch deployment frontend-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"frontend-container","livenessProbe":null,"readinessProbe":null}]}}}}'
-        
-        echo "Updated all application deployments to use nginx:alpine fallback images and removed health checks"
+        # Skip fallback image updates since we'll create minimal deployments
+        echo "Skipping fallback image updates - will create minimal deployments"
         sleep 30
         
         # Check node capacity and pod scheduling issues
