@@ -148,11 +148,29 @@ jobs:
     
     - name: Deploy to staging
       run: |
-        # Update image tags in k8s manifests
-        sed -i "s|:v1|:${{ env.IMAGE_TAG }}|g" k8s/*.yaml
+        # Update image tags in staging manifests
+        find k8s/staging/ -name "*.yaml" -exec sed -i "s|:v1|:${{ env.IMAGE_TAG }}|g" {} \;
+        find k8s/staging/ -name "*.yaml" -exec sed -i "s|:staging|:${{ env.IMAGE_TAG }}|g" {} \;
         
         # Apply staging-specific configurations
-        kubectl apply -f k8s/ -n staging
+        kubectl apply -f k8s/namespaces.yaml
+        kubectl apply -f k8s/staging/configmaps.yaml
+        kubectl apply -f k8s/secrets.yaml -n staging
+        kubectl apply -f k8s/staging/customer-db.yaml
+        kubectl apply -f k8s/staging/order-db.yaml
+        kubectl apply -f k8s/staging/product-db.yaml
+        kubectl apply -f k8s/staging/rabbitmq.yaml
+        kubectl apply -f k8s/staging/customer-service.yaml
+        kubectl apply -f k8s/staging/order-service.yaml
+        kubectl apply -f k8s/staging/product-service.yaml
+        kubectl apply -f k8s/staging/frontend.yaml
+        
+        # Deploy monitoring only if CRDs exist
+        if kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
+          kubectl apply -f k8s/staging/monitoring.yaml
+        else
+          echo "Prometheus Operator CRDs not found. Skipping monitoring deployment."
+        fi
     
     - name: Run smoke tests
       run: |
@@ -184,11 +202,29 @@ jobs:
     
     - name: Deploy to production
       run: |
-        # Update image tags in k8s manifests
-        sed -i "s|:v1|:${{ env.IMAGE_TAG }}|g" k8s/*.yaml
+        # Update image tags in production manifests
+        find k8s/ -name "*.yaml" -not -path "k8s/staging/*" -exec sed -i "s|:v1|:${{ env.IMAGE_TAG }}|g" {} \;
         
         # Apply production configurations
-        kubectl apply -f k8s/ -n production
+        kubectl apply -f k8s/namespaces.yaml
+        kubectl apply -f k8s/configmaps.yaml -n production
+        kubectl apply -f k8s/secrets.yaml -n production
+        kubectl apply -f k8s/customer-db.yaml -n production
+        kubectl apply -f k8s/order-db.yaml -n production
+        kubectl apply -f k8s/product-db.yaml -n production
+        kubectl apply -f k8s/rabbitmq.yaml -n production
+        kubectl apply -f k8s/customer-service.yaml -n production
+        kubectl apply -f k8s/order-service.yaml -n production
+        kubectl apply -f k8s/product-service.yaml -n production
+        kubectl apply -f k8s/frontend.yaml -n production
+        kubectl apply -f k8s/hpa.yaml -n production
+        
+        # Deploy monitoring only if CRDs exist
+        if kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
+          kubectl apply -f k8s/monitoring.yaml -n production
+        else
+          echo "Prometheus Operator CRDs not found. Skipping monitoring deployment."
+        fi
     
     - name: Run production tests
       run: |
