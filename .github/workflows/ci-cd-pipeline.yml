@@ -48,7 +48,7 @@ jobs:
     needs: security-scan
     strategy:
       matrix:
-        service: [customer-service, order-service, product-service, frontend]
+        service: [customer_service, order_service, product_service, frontend]
     
     steps:
     - uses: actions/checkout@v4
@@ -75,7 +75,7 @@ jobs:
     - name: Build Docker image
       run: |
         if [ "${{ matrix.service }}" = "frontend" ]; then
-          docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}/${{ matrix.service }}:${{ env.IMAGE_TAG }} ./frontend
+          docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}/frontend:${{ env.IMAGE_TAG }} ./frontend
         else
           docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}/${{ matrix.service }}:${{ env.IMAGE_TAG }} ./backend/${{ matrix.service }}
         fi
@@ -83,13 +83,13 @@ jobs:
     - name: Run Trivy container scan
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: '${{ env.AZURE_CONTAINER_REGISTRY }}/${{ matrix.service }}:${{ env.IMAGE_TAG }}'
+        image-ref: '${{ env.AZURE_CONTAINER_REGISTRY }}/${{ matrix.service == "frontend" && "frontend" || matrix.service }}:${{ env.IMAGE_TAG }}'
         format: 'sarif'
         output: 'trivy-container-results.sarif'
     
     - name: Upload container scan results
       uses: github/codeql-action/upload-sarif@v3
-      if: always()
+      if: always() && hashFiles('trivy-container-results.sarif') != ''
       with:
         sarif_file: 'trivy-container-results.sarif'
 
