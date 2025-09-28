@@ -245,7 +245,20 @@ jobs:
         
         # Apply production configurations
         kubectl apply -f k8s/namespaces.yaml
-        kubectl apply -f k8s/configmaps.yaml -n production
+        
+        # Create production configmap
+        kubectl create configmap ecomm-config-production -n production \
+          --from-literal=PRODUCTS_DB_NAME=products \
+          --from-literal=ORDERS_DB_NAME=orders \
+          --from-literal=CUSTOMERS_DB_NAME=customers \
+          --from-literal=AZURE_STORAGE_CONTAINER_NAME=product-images \
+          --from-literal=AZURE_SAS_TOKEN_EXPIRY_HOURS=24 \
+          --from-literal=PRODUCT_SERVICE_URL=http://product-service-production:8000 \
+          --from-literal=ORDER_SERVICE_URL=http://order-service-production:8001 \
+          --from-literal=CUSTOMER_SERVICE_URL=http://customer-service-production:8002 \
+          --from-literal=RABBITMQ_HOST=rabbitmq-service-production \
+          --dry-run=client -o yaml | kubectl apply -f -
+        
         kubectl apply -f k8s/secrets.yaml -n production
         kubectl apply -f k8s/customer-db.yaml -n production
         kubectl apply -f k8s/order-db.yaml -n production
