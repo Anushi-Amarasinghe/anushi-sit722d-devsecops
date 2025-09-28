@@ -1,5 +1,5 @@
 import logging
-import time
+import os
 
 import pytest
 from app.db import Base, SessionLocal, engine, get_db
@@ -21,41 +21,38 @@ logging.getLogger("app.main").setLevel(logging.WARNING)
 # --- Pytest Fixtures ---
 @pytest.fixture(scope="session", autouse=True)
 def setup_database_for_tests():
-    max_retries = 10
-    retry_delay_seconds = 3
-    for i in range(max_retries):
-        try:
-            logging.info(
-                f"Customer Service Tests: Attempting to connect to PostgreSQL for test setup (attempt {i+1}/{max_retries})..."
-            )
-            # Explicitly drop all tables first to ensure a clean slate for the session
-            Base.metadata.drop_all(bind=engine)
-            logging.info(
-                "Customer Service Tests: Successfully dropped all tables in PostgreSQL for test setup."
-            )
-
-            # Then create all tables required by the application
-            Base.metadata.create_all(bind=engine)
-            logging.info(
-                "Customer Service Tests: Successfully created all tables in PostgreSQL for test setup."
-            )
-            break
-        except OperationalError as e:
-            logging.warning(
-                f"Customer Service Tests: Test setup DB connection failed: {e}. Retrying in {retry_delay_seconds} seconds..."
-            )
-            time.sleep(retry_delay_seconds)
-            if i == max_retries - 1:
-                pytest.fail(
-                    f"Could not connect to PostgreSQL for Customer Service test setup after {max_retries} attempts: {e}"
-                )
-        except Exception as e:
-            pytest.fail(
-                f"Customer Service Tests: An unexpected error occurred during test DB setup: {e}",
-                pytrace=True,
-            )
+    """Set up the test database. Uses SQLite for local testing, PostgreSQL for CI/CD."""
+    try:
+        logging.info("Customer Service Tests: Setting up test database...")
+        
+        # Clean up any existing test database file (for SQLite)
+        if "sqlite" in str(engine.url):
+            test_db_path = "./test_customers.db"
+            if os.path.exists(test_db_path):
+                os.remove(test_db_path)
+                logging.info("Customer Service Tests: Removed existing SQLite test database.")
+        
+        # Create all tables required by the application
+        Base.metadata.create_all(bind=engine)
+        logging.info("Customer Service Tests: Successfully created all tables for test setup.")
+        
+    except Exception as e:
+        pytest.fail(
+            f"Customer Service Tests: Failed to set up test database: {e}",
+            pytrace=True,
+        )
 
     yield
+    
+    # Clean up after tests
+    try:
+        if "sqlite" in str(engine.url):
+            test_db_path = "./test_customers.db"
+            if os.path.exists(test_db_path):
+                os.remove(test_db_path)
+                logging.info("Customer Service Tests: Cleaned up SQLite test database.")
+    except Exception as e:
+        logging.warning(f"Customer Service Tests: Failed to clean up test database: {e}")
 
 
 @pytest.fixture(scope="function")
