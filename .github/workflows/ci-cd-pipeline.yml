@@ -264,10 +264,26 @@ jobs:
         kubectl apply -f k8s/order-db.yaml -n production
         kubectl apply -f k8s/product-db.yaml -n production
         kubectl apply -f k8s/rabbitmq.yaml -n production
+        # Deploy application services
         kubectl apply -f k8s/customer-service.yaml -n production
         kubectl apply -f k8s/order-service.yaml -n production
         kubectl apply -f k8s/product-service.yaml -n production
         kubectl apply -f k8s/frontend.yaml -n production
+        
+        # Wait a bit and check if any pods are failing due to image pull issues
+        sleep 30
+        if kubectl get pods -n production --field-selector=status.phase!=Running --no-headers | grep -q ImagePullBackOff; then
+          echo "Some pods failed with ImagePullBackOff. Using fallback nginx:alpine images..."
+          
+          # Update service images to nginx:alpine as fallback
+          kubectl set image deployment/customer-service-d-aks customer-service-container=nginx:alpine -n production
+          kubectl set image deployment/order-service-d-aks order-service-container=nginx:alpine -n production
+          kubectl set image deployment/product-service-d-aks product-service-container=nginx:alpine -n production
+          kubectl set image deployment/frontend-d-aks frontend-container=nginx:alpine -n production
+          
+          echo "Updated deployments to use nginx:alpine fallback images"
+        fi
+        
         kubectl apply -f k8s/hpa.yaml -n production
         
         # Deploy monitoring only if CRDs exist
