@@ -1,5 +1,5 @@
 import logging
-import time
+import os
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 
@@ -23,41 +23,38 @@ logging.getLogger("app.main").setLevel(logging.WARNING)
 # --- Pytest Fixtures ---
 @pytest.fixture(scope="session", autouse=True)
 def setup_database_for_tests():
-    max_retries = 10
-    retry_delay_seconds = 3
-    for i in range(max_retries):
-        try:
-            logging.info(
-                f"Order Service Tests: Attempting to connect to PostgreSQL for test setup (attempt {i+1}/{max_retries})..."
-            )
-            # Explicitly drop all tables first to ensure a clean slate for the session
-            Base.metadata.drop_all(bind=engine)
-            logging.info(
-                "Order Service Tests: Successfully dropped all tables in PostgreSQL for test setup."
-            )
-
-            # Then create all tables required by the application
-            Base.metadata.create_all(bind=engine)
-            logging.info(
-                "Order Service Tests: Successfully created all tables in PostgreSQL for test setup."
-            )
-            break
-        except OperationalError as e:
-            logging.warning(
-                f"Order Service Tests: Test setup DB connection failed: {e}. Retrying in {retry_delay_seconds} seconds..."
-            )
-            time.sleep(retry_delay_seconds)
-            if i == max_retries - 1:
-                pytest.fail(
-                    f"Could not connect to PostgreSQL for Order Service test setup after {max_retries} attempts: {e}"
-                )
-        except Exception as e:
-            pytest.fail(
-                f"Order Service Tests: An unexpected error occurred during test DB setup: {e}",
-                pytrace=True,
-            )
+    """Set up the test database. Uses SQLite for local testing, PostgreSQL for CI/CD."""
+    try:
+        logging.info("Order Service Tests: Setting up test database...")
+        
+        # Clean up any existing test database file (for SQLite)
+        if "sqlite" in str(engine.url):
+            test_db_path = "./test_order_service.db"
+            if os.path.exists(test_db_path):
+                os.remove(test_db_path)
+                logging.info("Order Service Tests: Removed existing SQLite test database.")
+        
+        # Create all tables required by the application
+        Base.metadata.create_all(bind=engine)
+        logging.info("Order Service Tests: Successfully created all tables for test setup.")
+        
+    except Exception as e:
+        pytest.fail(
+            f"Order Service Tests: Failed to set up test database: {e}",
+            pytrace=True,
+        )
 
     yield
+    
+    # Clean up after tests
+    try:
+        if "sqlite" in str(engine.url):
+            test_db_path = "./test_order_service.db"
+            if os.path.exists(test_db_path):
+                os.remove(test_db_path)
+                logging.info("Order Service Tests: Cleaned up SQLite test database.")
+    except Exception as e:
+        logging.warning(f"Order Service Tests: Failed to clean up test database: {e}")
 
 
 @pytest.fixture(scope="function")
