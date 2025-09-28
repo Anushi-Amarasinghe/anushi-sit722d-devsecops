@@ -305,6 +305,9 @@ jobs:
         # Deploy only frontend service to demonstrate successful deployment
         echo "=== Deploying minimal frontend service only ==="
         
+        # Delete existing frontend deployment if it exists
+        kubectl delete deployment frontend-d-aks -n production --ignore-not-found
+        
         # Create only frontend deployment with minimal resources
         kubectl create deployment frontend-d-aks --image=nginx:alpine --replicas=1 -n production
         
