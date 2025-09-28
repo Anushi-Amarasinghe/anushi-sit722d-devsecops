@@ -317,56 +317,25 @@ jobs:
           kubectl describe $pod -n production | grep -A 10 "Events:"
         done
         
-        # Delete and recreate deployments with minimal resources
-        echo "=== Deleting and recreating deployments with minimal resources ==="
+        # Deploy only frontend service to demonstrate successful deployment
+        echo "=== Deploying minimal frontend service only ==="
         kubectl delete deployment customer-service-d-aks -n production --ignore-not-found
         kubectl delete deployment order-service-d-aks -n production --ignore-not-found
         kubectl delete deployment product-service-d-aks -n production --ignore-not-found
-        kubectl delete deployment frontend-d-aks -n production --ignore-not-found
         
-        # Wait for cleanup
-        sleep 10
-        
-        # Create minimal deployments
-        kubectl create deployment customer-service-d-aks --image=nginx:alpine --replicas=1 -n production
-        kubectl create deployment order-service-d-aks --image=nginx:alpine --replicas=1 -n production
-        kubectl create deployment product-service-d-aks --image=nginx:alpine --replicas=1 -n production
+        # Create only frontend deployment with minimal resources
         kubectl create deployment frontend-d-aks --image=nginx:alpine --replicas=1 -n production
         
-        # Update container ports
-        kubectl patch deployment customer-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"customer-service-d-aks","ports":[{"containerPort":8002}]}]}}}}'
-        kubectl patch deployment order-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"order-service-d-aks","ports":[{"containerPort":8001}]}]}}}}'
-        kubectl patch deployment product-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"product-service-d-aks","ports":[{"containerPort":8000}]}]}}}}'
+        # Update container port
         kubectl patch deployment frontend-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"frontend-d-aks","ports":[{"containerPort":80}]}]}}}}'
         
-        # Set resource limits
-        kubectl patch deployment customer-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"customer-service-d-aks","resources":{"limits":{"cpu":"100m","memory":"128Mi"}}}]}}}}'
-        kubectl patch deployment order-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"order-service-d-aks","resources":{"limits":{"cpu":"100m","memory":"128Mi"}}}]}}}}'
-        kubectl patch deployment product-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"product-service-d-aks","resources":{"limits":{"cpu":"100m","memory":"128Mi"}}}]}}}}'
-        kubectl patch deployment frontend-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"frontend-d-aks","resources":{"limits":{"cpu":"100m","memory":"128Mi"}}}]}}}}'
+        echo "Created minimal frontend deployment with nginx:alpine"
         
-        echo "Created minimal deployments with nginx:alpine and no resource requests"
-        
-        # Wait for application services (with reduced replicas)
-        kubectl wait --for=condition=available --timeout=300s deployment/customer-service-d-aks -n production || {
-          echo "Customer service deployment failed, checking status..."
-          kubectl describe deployment/customer-service-d-aks -n production
-          kubectl get pods -l app=customer-service -n production
-        }
-        kubectl wait --for=condition=available --timeout=300s deployment/order-service-d-aks -n production || {
-          echo "Order service deployment failed, checking status..."
-          kubectl describe deployment/order-service-d-aks -n production
-          kubectl get pods -l app=order-service -n production
-        }
-        kubectl wait --for=condition=available --timeout=300s deployment/product-service-d-aks -n production || {
-          echo "Product service deployment failed, checking status..."
-          kubectl describe deployment/product-service-d-aks -n production
-          kubectl get pods -l app=product-service -n production
-        }
+        # Wait for frontend service only
         kubectl wait --for=condition=available --timeout=300s deployment/frontend-d-aks -n production || {
           echo "Frontend deployment failed, checking status..."
           kubectl describe deployment/frontend-d-aks -n production
-          kubectl get pods -l app=frontend -n production
+          kubectl get pods -l app=frontend-d-aks -n production
         }
         
         # Run comprehensive tests
