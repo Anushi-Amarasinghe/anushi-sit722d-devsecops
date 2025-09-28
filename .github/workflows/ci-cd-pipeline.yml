@@ -87,7 +87,7 @@ jobs:
       run: |
         cd backend/${{ matrix.service }}
         # Create test database
-        PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE ${matrix.service};" || true
+        PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE ${{ matrix.service }};" || true
         # Set environment variables for tests
         echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/${{ matrix.service }}" >> $GITHUB_ENV
         echo "POSTGRES_HOST=localhost" >> $GITHUB_ENV
