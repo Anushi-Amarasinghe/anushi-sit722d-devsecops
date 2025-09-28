@@ -46,6 +46,9 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     needs: security-scan
+    permissions:
+      contents: read
+      security-events: write
     strategy:
       matrix:
         service: [customer_service, order_service, product_service, frontend]
