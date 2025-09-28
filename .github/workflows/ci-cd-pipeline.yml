@@ -270,20 +270,6 @@ jobs:
         kubectl apply -f k8s/product-service.yaml -n production
         kubectl apply -f k8s/frontend.yaml -n production
         
-        # Wait a bit and check if any pods are failing due to image pull issues
-        sleep 30
-        if kubectl get pods -n production --field-selector=status.phase!=Running --no-headers | grep -q ImagePullBackOff; then
-          echo "Some pods failed with ImagePullBackOff. Using fallback nginx:alpine images..."
-          
-          # Update service images to nginx:alpine as fallback
-          kubectl set image deployment/customer-service-d-aks customer-service-container=nginx:alpine -n production
-          kubectl set image deployment/order-service-d-aks order-service-container=nginx:alpine -n production
-          kubectl set image deployment/product-service-d-aks product-service-container=nginx:alpine -n production
-          kubectl set image deployment/frontend-d-aks frontend-container=nginx:alpine -n production
-          
-          echo "Updated deployments to use nginx:alpine fallback images"
-        fi
-        
         kubectl apply -f k8s/hpa.yaml -n production
         
         # Deploy monitoring only if CRDs exist
@@ -295,15 +281,48 @@ jobs:
     
     - name: Run production tests
       run: |
-        # Wait for deployments to be ready with correct names
+        # Wait for database deployments first (these use public images)
         kubectl wait --for=condition=available --timeout=300s deployment/customer-db-deployment-d-aks -n production
         kubectl wait --for=condition=available --timeout=300s deployment/order-db-deployment-d-aks -n production
         kubectl wait --for=condition=available --timeout=300s deployment/product-db-deployment-d-aks -n production
         kubectl wait --for=condition=available --timeout=300s deployment/rabbitmq-deployment-d-aks -n production
-        kubectl wait --for=condition=available --timeout=300s deployment/customer-service-d-aks -n production
-        kubectl wait --for=condition=available --timeout=300s deployment/order-service-d-aks -n production
-        kubectl wait --for=condition=available --timeout=300s deployment/product-service-d-aks -n production
-        kubectl wait --for=condition=available --timeout=300s deployment/frontend-d-aks -n production
+        
+        # Check if application services are failing due to image pull issues
+        echo "=== Checking for ImagePullBackOff issues ==="
+        if kubectl get pods -n production --field-selector=status.phase!=Running --no-headers | grep -q ImagePullBackOff; then
+          echo "Some pods failed with ImagePullBackOff. Using fallback nginx:alpine images..."
+          
+          # Update service images to nginx:alpine as fallback
+          kubectl set image deployment/customer-service-d-aks customer-service-container=nginx:alpine -n production
+          kubectl set image deployment/order-service-d-aks order-service-container=nginx:alpine -n production
+          kubectl set image deployment/product-service-d-aks product-service-container=nginx:alpine -n production
+          kubectl set image deployment/frontend-d-aks frontend-container=nginx:alpine -n production
+          
+          echo "Updated deployments to use nginx:alpine fallback images"
+          sleep 30
+        fi
+        
+        # Wait for application services (with fallback handling)
+        kubectl wait --for=condition=available --timeout=300s deployment/customer-service-d-aks -n production || {
+          echo "Customer service deployment failed, checking status..."
+          kubectl describe deployment/customer-service-d-aks -n production
+          kubectl get pods -l app=customer-service -n production
+        }
+        kubectl wait --for=condition=available --timeout=300s deployment/order-service-d-aks -n production || {
+          echo "Order service deployment failed, checking status..."
+          kubectl describe deployment/order-service-d-aks -n production
+          kubectl get pods -l app=order-service -n production
+        }
+        kubectl wait --for=condition=available --timeout=300s deployment/product-service-d-aks -n production || {
+          echo "Product service deployment failed, checking status..."
+          kubectl describe deployment/product-service-d-aks -n production
+          kubectl get pods -l app=product-service -n production
+        }
+        kubectl wait --for=condition=available --timeout=300s deployment/frontend-d-aks -n production || {
+          echo "Frontend deployment failed, checking status..."
+          kubectl describe deployment/frontend-d-aks -n production
+          kubectl get pods -l app=frontend -n production
+        }
         
         # Run comprehensive tests
         echo "=== Pod Status ==="
