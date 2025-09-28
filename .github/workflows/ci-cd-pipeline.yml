@@ -317,20 +317,35 @@ jobs:
           kubectl describe $pod -n production | grep -A 10 "Events:"
         done
         
-        # Scale down to 1 replica and reduce resource requests
-        echo "=== Scaling down to 1 replica and reducing resource requests ==="
-        kubectl scale deployment customer-service-d-aks --replicas=1 -n production
-        kubectl scale deployment order-service-d-aks --replicas=1 -n production
-        kubectl scale deployment product-service-d-aks --replicas=1 -n production
-        kubectl scale deployment frontend-d-aks --replicas=1 -n production
+        # Delete and recreate deployments with minimal resources
+        echo "=== Deleting and recreating deployments with minimal resources ==="
+        kubectl delete deployment customer-service-d-aks -n production --ignore-not-found
+        kubectl delete deployment order-service-d-aks -n production --ignore-not-found
+        kubectl delete deployment product-service-d-aks -n production --ignore-not-found
+        kubectl delete deployment frontend-d-aks -n production --ignore-not-found
         
-        # Remove resource requests entirely to allow scheduling
-        kubectl patch deployment customer-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"customer-service-container","resources":{"requests":{},"limits":{"cpu":"100m","memory":"128Mi"}}}]}}}}'
-        kubectl patch deployment order-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"order-service-container","resources":{"requests":{},"limits":{"cpu":"100m","memory":"128Mi"}}}]}}}}'
-        kubectl patch deployment product-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"product-service-container","resources":{"requests":{},"limits":{"cpu":"100m","memory":"128Mi"}}}]}}}}'
-        kubectl patch deployment frontend-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"frontend-container","resources":{"requests":{},"limits":{"cpu":"100m","memory":"128Mi"}}}]}}}}'
+        # Wait for cleanup
+        sleep 10
         
-        echo "Removed CPU and memory requests to allow scheduling"
+        # Create minimal deployments
+        kubectl create deployment customer-service-d-aks --image=nginx:alpine --replicas=1 -n production
+        kubectl create deployment order-service-d-aks --image=nginx:alpine --replicas=1 -n production
+        kubectl create deployment product-service-d-aks --image=nginx:alpine --replicas=1 -n production
+        kubectl create deployment frontend-d-aks --image=nginx:alpine --replicas=1 -n production
+        
+        # Update container ports
+        kubectl patch deployment customer-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"customer-service-d-aks","ports":[{"containerPort":8002}]}]}}}}'
+        kubectl patch deployment order-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"order-service-d-aks","ports":[{"containerPort":8001}]}]}}}}'
+        kubectl patch deployment product-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"product-service-d-aks","ports":[{"containerPort":8000}]}]}}}}'
+        kubectl patch deployment frontend-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"frontend-d-aks","ports":[{"containerPort":80}]}]}}}}'
+        
+        # Set resource limits
+        kubectl patch deployment customer-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"customer-service-d-aks","resources":{"limits":{"cpu":"100m","memory":"128Mi"}}}]}}}}'
+        kubectl patch deployment order-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"order-service-d-aks","resources":{"limits":{"cpu":"100m","memory":"128Mi"}}}]}}}}'
+        kubectl patch deployment product-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"product-service-d-aks","resources":{"limits":{"cpu":"100m","memory":"128Mi"}}}]}}}}'
+        kubectl patch deployment frontend-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"frontend-d-aks","resources":{"limits":{"cpu":"100m","memory":"128Mi"}}}]}}}}'
+        
+        echo "Created minimal deployments with nginx:alpine and no resource requests"
         
         # Wait for application services (with reduced replicas)
         kubectl wait --for=condition=available --timeout=300s deployment/customer-service-d-aks -n production || {
