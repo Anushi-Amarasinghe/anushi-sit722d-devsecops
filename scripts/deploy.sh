@@ -46,17 +46,21 @@ deploy_service() {
     # Update image tag
     update_image_tags "$manifest_file" "$service_name" "$IMAGE_TAG"
     
-    # Update namespace
-    update_namespace "$manifest_file" "$NAMESPACE"
+    # Update namespace only if not staging (staging manifests have namespace already)
+    if [[ "$manifest_file" != *"staging"* ]]; then
+        update_namespace "$manifest_file" "$NAMESPACE"
+    fi
     
     # Apply manifest
     kubectl apply -f "$manifest_file"
     
     # Wait for deployment
     echo "⏳ Waiting for $service_name deployment to be ready..."
-    kubectl wait --for=condition=available --timeout=300s deployment/$service_name -n "$NAMESPACE" || {
-        echo "❌ Deployment failed for $service_name"
-        kubectl describe deployment/$service_name -n "$NAMESPACE"
+    # Get the actual deployment name from the manifest
+    deployment_name=$(grep "name:" "$manifest_file" | head -1 | awk '{print $2}')
+    kubectl wait --for=condition=available --timeout=300s deployment/$deployment_name -n "$NAMESPACE" || {
+        echo "❌ Deployment failed for $deployment_name"
+        kubectl describe deployment/$deployment_name -n "$NAMESPACE"
         kubectl logs -l app=$service_name -n "$NAMESPACE" --tail=50
         exit 1
     }
@@ -98,24 +102,45 @@ echo "🔧 Preparing deployment..."
 kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
 # Deploy services
-deploy_service "customer-service" "k8s/customer-service.yaml"
-deploy_service "order-service" "k8s/order-service.yaml"
-deploy_service "product-service" "k8s/product-service.yaml"
-deploy_service "frontend" "k8s/frontend.yaml"
+if [ "$ENVIRONMENT" = "staging" ]; then
+    deploy_service "customer-service" "k8s/staging/customer-service.yaml"
+    deploy_service "order-service" "k8s/staging/order-service.yaml"
+    deploy_service "product-service" "k8s/staging/product-service.yaml"
+    deploy_service "frontend" "k8s/staging/frontend.yaml"
+else
+    deploy_service "customer-service" "k8s/customer-service.yaml"
+    deploy_service "order-service" "k8s/order-service.yaml"
+    deploy_service "product-service" "k8s/product-service.yaml"
+    deploy_service "frontend" "k8s/frontend.yaml"
+fi
 
 # Deploy databases
 echo "📊 Deploying databases..."
-kubectl apply -f k8s/customer-db.yaml -n "$NAMESPACE"
-kubectl apply -f k8s/order-db.yaml -n "$NAMESPACE"
-kubectl apply -f k8s/product-db.yaml -n "$NAMESPACE"
+if [ "$ENVIRONMENT" = "staging" ]; then
+    kubectl apply -f k8s/staging/customer-db.yaml
+    kubectl apply -f k8s/staging/order-db.yaml
+    kubectl apply -f k8s/staging/product-db.yaml
+else
+    kubectl apply -f k8s/customer-db.yaml -n "$NAMESPACE"
+    kubectl apply -f k8s/order-db.yaml -n "$NAMESPACE"
+    kubectl apply -f k8s/product-db.yaml -n "$NAMESPACE"
+fi
 
 # Deploy RabbitMQ
 echo "🐰 Deploying RabbitMQ..."
-kubectl apply -f k8s/rabbitmq.yaml -n "$NAMESPACE"
+if [ "$ENVIRONMENT" = "staging" ]; then
+    kubectl apply -f k8s/staging/rabbitmq.yaml
+else
+    kubectl apply -f k8s/rabbitmq.yaml -n "$NAMESPACE"
+fi
 
 # Deploy ConfigMaps and Secrets
 echo "⚙️  Deploying configuration..."
-kubectl apply -f k8s/configmaps.yaml -n "$NAMESPACE"
+if [ "$ENVIRONMENT" = "staging" ]; then
+    kubectl apply -f k8s/staging/configmaps.yaml
+else
+    kubectl apply -f k8s/configmaps.yaml -n "$NAMESPACE"
+fi
 kubectl apply -f k8s/secrets.yaml -n "$NAMESPACE"
 
 # Deploy HPA for production
@@ -124,10 +149,19 @@ if [ "$ENVIRONMENT" = "production" ]; then
     kubectl apply -f k8s/hpa.yaml -n "$NAMESPACE"
 fi
 
-# Deploy monitoring for production
+# Deploy monitoring
 if [ "$ENVIRONMENT" = "production" ]; then
     echo "📊 Deploying monitoring..."
     kubectl apply -f k8s/monitoring.yaml -n "$NAMESPACE"
+elif [ "$ENVIRONMENT" = "staging" ]; then
+    echo "📊 Deploying monitoring for staging..."
+    # Check if Prometheus Operator CRDs are installed
+    if kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
+        kubectl apply -f k8s/staging/monitoring.yaml
+    else
+        echo "⚠️  Prometheus Operator CRDs not found. Skipping monitoring deployment."
+        echo "   To enable monitoring, install Prometheus Operator first."
+    fi
 fi
 
 # Wait for all deployments

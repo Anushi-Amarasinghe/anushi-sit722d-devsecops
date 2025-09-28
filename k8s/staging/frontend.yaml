@@ -17,17 +17,17 @@ spec:
     spec:
       containers:
       - name: frontend-container
-        image: sit722devopsacr.azurecr.io/frontend:staging
+        image: nginx:alpine
         imagePullPolicy: Always
         ports:
         - containerPort: 80
         resources:
           requests:
-            memory: "128Mi"
-            cpu: "100m"
+            memory: "32Mi"
+            cpu: "25m"
           limits:
-            memory: "256Mi"
-            cpu: "200m"
+            memory: "64Mi"
+            cpu: "50m"
         env:
         - name: PRODUCT_API_BASE_URL
           value: http://product-service-staging:8000

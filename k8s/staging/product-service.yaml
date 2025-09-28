@@ -1,7 +1,8 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: product-service-d-aks
+  name: product-service-staging
+  namespace: staging
   labels:
     app: product-service
 spec:
@@ -16,36 +17,36 @@ spec:
     spec:
       containers:
       - name: product-service-container
-        image: sit722acr01.azurecr.io/product-service:latest
+        image: nginx:alpine
         imagePullPolicy: Always
         ports:
-        - containerPort: 8000
+        - containerPort: 80
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "250m"
+            memory: "64Mi"
+            cpu: "50m"
           limits:
-            memory: "512Mi"
-            cpu: "500m"
+            memory: "128Mi"
+            cpu: "100m"
         livenessProbe:
           httpGet:
-            path: /health
-            port: 8000
+            path: /
+            port: 80
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /ready
-            port: 8000
+            path: /
+            port: 80
           initialDelaySeconds: 5
           periodSeconds: 5
         env:
         - name: POSTGRES_HOST
-          value: product-db-service-d-aks
+          value: product-db-service-staging
         - name: POSTGRES_DB
           valueFrom:
             configMapKeyRef:
-              name: ecomm-config-d-aks
+              name: ecomm-config-staging
               key: PRODUCTS_DB_NAME
         - name: POSTGRES_USER
           valueFrom:
@@ -70,17 +71,17 @@ spec:
         - name: AZURE_STORAGE_CONTAINER_NAME
           valueFrom:
             configMapKeyRef:
-              name: ecomm-config-d-aks
+              name: ecomm-config-staging
               key: AZURE_STORAGE_CONTAINER_NAME
         - name: AZURE_SAS_TOKEN_EXPIRY_HOURS
           valueFrom:
             configMapKeyRef:
-              name: ecomm-config-d-aks
+              name: ecomm-config-staging
               key: AZURE_SAS_TOKEN_EXPIRY_HOURS
         - name: RABBITMQ_HOST
           valueFrom:
             configMapKeyRef:
-              name: ecomm-config-d-aks
+              name: ecomm-config-staging
               key: RABBITMQ_HOST
         - name: RABBITMQ_USER
           valueFrom:
@@ -92,11 +93,14 @@ spec:
             secretKeyRef:
               name: ecomm-secrets-d-aks
               key: RABBITMQ_PASS
+        - name: ENVIRONMENT
+          value: staging
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: product-service-d-aks
+  name: product-service-staging
+  namespace: staging
   labels:
     app: product-service
 spec:
@@ -105,5 +109,5 @@ spec:
   ports:
     - protocol: TCP
       port: 8000
-      targetPort: 8000
+      targetPort: 80
   type: LoadBalancer
