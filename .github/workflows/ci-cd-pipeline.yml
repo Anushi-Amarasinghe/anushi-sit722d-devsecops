@@ -49,6 +49,19 @@ jobs:
     permissions:
       contents: read
       security-events: write
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     strategy:
       matrix:
         service: [customer_service, order_service, product_service, frontend]
@@ -68,6 +81,20 @@ jobs:
         cd backend/${{ matrix.service }}
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
+    
+    - name: Set up test database
+      if: matrix.service != 'frontend'
+      run: |
+        cd backend/${{ matrix.service }}
+        # Create test database
+        PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE ${matrix.service};" || true
+        # Set environment variables for tests
+        echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/${{ matrix.service }}" >> $GITHUB_ENV
+        echo "POSTGRES_HOST=localhost" >> $GITHUB_ENV
+        echo "POSTGRES_PORT=5432" >> $GITHUB_ENV
+        echo "POSTGRES_USER=postgres" >> $GITHUB_ENV
+        echo "POSTGRES_PASSWORD=postgres" >> $GITHUB_ENV
+        echo "POSTGRES_DB=${{ matrix.service }}" >> $GITHUB_ENV
     
     - name: Run tests
       if: matrix.service != 'frontend'
