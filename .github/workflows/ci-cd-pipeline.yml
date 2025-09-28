@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 env:
-  AZURE_CONTAINER_REGISTRY: sit722acr01.azurecr.io
+  AZURE_CONTAINER_REGISTRY: sit722acr11.azurecr.io
   AZURE_RESOURCE_GROUP: sit722-rg
   AKS_CLUSTER_NAME: sit722-aks
   IMAGE_TAG: ${{ github.sha }}
