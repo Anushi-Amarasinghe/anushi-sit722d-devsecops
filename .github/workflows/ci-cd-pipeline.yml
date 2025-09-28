@@ -311,9 +311,6 @@ jobs:
         # Create only frontend deployment with minimal resources
         kubectl create deployment frontend-d-aks --image=nginx:alpine --replicas=1 -n production
         
-        # Update container port
-        kubectl patch deployment frontend-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"frontend-d-aks","ports":[{"containerPort":80}]}]}}}}'
-        
         echo "Created minimal frontend deployment with nginx:alpine"
         
         # Wait for frontend service only
