@@ -81,11 +81,13 @@ jobs:
         fi
     
     - name: Run Trivy container scan
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: '${{ env.AZURE_CONTAINER_REGISTRY }}/${{ matrix.service == "frontend" && "frontend" || matrix.service }}:${{ env.IMAGE_TAG }}'
-        format: 'sarif'
-        output: 'trivy-container-results.sarif'
+      run: |
+        if [ "${{ matrix.service }}" = "frontend" ]; then
+          IMAGE_NAME="${{ env.AZURE_CONTAINER_REGISTRY }}/frontend:${{ env.IMAGE_TAG }}"
+        else
+          IMAGE_NAME="${{ env.AZURE_CONTAINER_REGISTRY }}/${{ matrix.service }}:${{ env.IMAGE_TAG }}"
+        fi
+        trivy image --format sarif --output trivy-container-results.sarif "$IMAGE_NAME"
     
     - name: Upload container scan results
       uses: github/codeql-action/upload-sarif@v3
