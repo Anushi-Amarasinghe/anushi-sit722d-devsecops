@@ -105,6 +105,9 @@ jobs:
     - name: Build Docker image
       run: |
         if [ "${{ matrix.service }}" = "frontend" ]; then
+          echo "Building frontend Docker image..."
+          ls -la ./frontend/
+          cat ./frontend/Dockerfile
           docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}/frontend:${{ env.IMAGE_TAG }} ./frontend
         else
           docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}/${{ matrix.service }}:${{ env.IMAGE_TAG }} ./backend/${{ matrix.service }}
