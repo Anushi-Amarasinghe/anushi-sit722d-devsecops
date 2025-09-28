@@ -246,17 +246,17 @@ jobs:
         # Apply production configurations
         kubectl apply -f k8s/namespaces.yaml
         
-        # Create production configmap
-        kubectl create configmap ecomm-config-production -n production \
+        # Create production configmap with correct name
+        kubectl create configmap ecomm-config-d-aks -n production \
           --from-literal=PRODUCTS_DB_NAME=products \
           --from-literal=ORDERS_DB_NAME=orders \
           --from-literal=CUSTOMERS_DB_NAME=customers \
           --from-literal=AZURE_STORAGE_CONTAINER_NAME=product-images \
           --from-literal=AZURE_SAS_TOKEN_EXPIRY_HOURS=24 \
-          --from-literal=PRODUCT_SERVICE_URL=http://product-service-production:8000 \
-          --from-literal=ORDER_SERVICE_URL=http://order-service-production:8001 \
-          --from-literal=CUSTOMER_SERVICE_URL=http://customer-service-production:8002 \
-          --from-literal=RABBITMQ_HOST=rabbitmq-service-production \
+          --from-literal=PRODUCT_SERVICE_URL=http://product-service-d-aks:8000 \
+          --from-literal=ORDER_SERVICE_URL=http://order-service-d-aks:8001 \
+          --from-literal=CUSTOMER_SERVICE_URL=http://customer-service-d-aks:8002 \
+          --from-literal=RABBITMQ_HOST=rabbitmq-service-d-aks \
           --dry-run=client -o yaml | kubectl apply -f -
         
         kubectl apply -f k8s/secrets.yaml -n production
@@ -279,9 +279,20 @@ jobs:
     
     - name: Run production tests
       run: |
-        # Wait for deployments to be ready
-        kubectl wait --for=condition=available --timeout=300s deployment --all -n production
+        # Wait for deployments to be ready with correct names
+        kubectl wait --for=condition=available --timeout=300s deployment/customer-db-deployment-d-aks -n production
+        kubectl wait --for=condition=available --timeout=300s deployment/order-db-deployment-d-aks -n production
+        kubectl wait --for=condition=available --timeout=300s deployment/product-db-deployment-d-aks -n production
+        kubectl wait --for=condition=available --timeout=300s deployment/rabbitmq-deployment-d-aks -n production
+        kubectl wait --for=condition=available --timeout=300s deployment/customer-service-d-aks -n production
+        kubectl wait --for=condition=available --timeout=300s deployment/order-service-d-aks -n production
+        kubectl wait --for=condition=available --timeout=300s deployment/product-service-d-aks -n production
+        kubectl wait --for=condition=available --timeout=300s deployment/frontend-d-aks -n production
         
         # Run comprehensive tests
+        echo "=== Pod Status ==="
         kubectl get pods -n production
+        echo "=== Service Status ==="
         kubectl get services -n production
+        echo "=== Deployment Status ==="
+        kubectl get deployments -n production
