@@ -39,7 +39,7 @@ jobs:
     - name: Run Python security check
       run: |
         pip install safety
-        safety check --json --output safety-report.json || true
+        safety check --json --output json > safety-report.json || true
         cat safety-report.json
 
   # Build and Test
