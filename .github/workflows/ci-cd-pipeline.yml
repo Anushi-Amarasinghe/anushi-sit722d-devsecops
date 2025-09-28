@@ -317,12 +317,20 @@ jobs:
           kubectl describe $pod -n production | grep -A 10 "Events:"
         done
         
-        # Scale down to 1 replica to reduce resource pressure
-        echo "=== Scaling down to 1 replica to reduce resource pressure ==="
+        # Scale down to 1 replica and reduce resource requests
+        echo "=== Scaling down to 1 replica and reducing resource requests ==="
         kubectl scale deployment customer-service-d-aks --replicas=1 -n production
         kubectl scale deployment order-service-d-aks --replicas=1 -n production
         kubectl scale deployment product-service-d-aks --replicas=1 -n production
         kubectl scale deployment frontend-d-aks --replicas=1 -n production
+        
+        # Reduce CPU requests to minimal values
+        kubectl patch deployment customer-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"customer-service-container","resources":{"requests":{"cpu":"50m","memory":"64Mi"},"limits":{"cpu":"100m","memory":"128Mi"}}}]}}}}'
+        kubectl patch deployment order-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"order-service-container","resources":{"requests":{"cpu":"50m","memory":"64Mi"},"limits":{"cpu":"100m","memory":"128Mi"}}}]}}}}'
+        kubectl patch deployment product-service-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"product-service-container","resources":{"requests":{"cpu":"50m","memory":"64Mi"},"limits":{"cpu":"100m","memory":"128Mi"}}}]}}}}'
+        kubectl patch deployment frontend-d-aks -n production -p '{"spec":{"template":{"spec":{"containers":[{"name":"frontend-container","resources":{"requests":{"cpu":"50m","memory":"64Mi"},"limits":{"cpu":"100m","memory":"128Mi"}}}]}}}}'
+        
+        echo "Reduced CPU requests to 50m and memory to 64Mi for all services"
         
         # Wait for application services (with reduced replicas)
         kubectl wait --for=condition=available --timeout=300s deployment/customer-service-d-aks -n production || {
