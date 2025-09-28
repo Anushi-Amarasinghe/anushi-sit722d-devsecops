@@ -1,0 +1,16 @@
+{
+  "name": "ecommerce-frontend",
+  "version": "1.0.0",
+  "description": "E-commerce frontend application",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"No tests specified\" && exit 0",
+    "start": "echo \"Frontend is served by nginx\" && exit 0"
+  },
+  "keywords": ["ecommerce", "frontend", "javascript"],
+  "author": "DevSecOps Team",
+  "license": "MIT",
+  "devDependencies": {
+    "jest": "^29.0.0"
+  }
+}
