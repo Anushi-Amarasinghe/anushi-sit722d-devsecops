@@ -1,24 +1,32 @@
 import os
+import sys
 
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 
+# Check if we're running tests
+IS_TESTING = "pytest" in sys.modules or os.getenv("TESTING") == "true"
 
-POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
-POSTGRES_DB = os.getenv("POSTGRES_DB", "products")
-POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
-POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
+if IS_TESTING and os.getenv("POSTGRES_HOST") is None:
+    # Use SQLite for local testing when PostgreSQL is not available
+    DATABASE_URL = "sqlite:///./test_products.db"
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    # Use PostgreSQL for production and CI/CD
+    POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
+    POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
+    POSTGRES_DB = os.getenv("POSTGRES_DB", "products")
+    POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+    POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
 
-DATABASE_URL = (
-    "postgresql://"
-    f"{POSTGRES_USER}:{POSTGRES_PASSWORD}@"
-    f"{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
-)
+    DATABASE_URL = (
+        "postgresql://"
+        f"{POSTGRES_USER}:{POSTGRES_PASSWORD}@"
+        f"{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+    )
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
-# --- SQLAlchemy Engine and Session Setup ---
-engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
