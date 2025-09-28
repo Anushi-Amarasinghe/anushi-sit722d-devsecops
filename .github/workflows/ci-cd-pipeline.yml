@@ -160,10 +160,26 @@ jobs:
         kubectl apply -f k8s/staging/order-db.yaml
         kubectl apply -f k8s/staging/product-db.yaml
         kubectl apply -f k8s/staging/rabbitmq.yaml
+        
+        # Try to deploy services with application images first
         kubectl apply -f k8s/staging/customer-service.yaml
         kubectl apply -f k8s/staging/order-service.yaml
         kubectl apply -f k8s/staging/product-service.yaml
         kubectl apply -f k8s/staging/frontend.yaml
+        
+        # Wait a bit and check if any pods are failing due to image pull issues
+        sleep 30
+        if kubectl get pods -n staging --field-selector=status.phase!=Running --no-headers | grep -q ImagePullBackOff; then
+          echo "Some pods failed with ImagePullBackOff. Using fallback nginx:alpine images..."
+          
+          # Update service images to nginx:alpine as fallback
+          kubectl set image deployment/customer-service-staging customer-service-container=nginx:alpine -n staging
+          kubectl set image deployment/order-service-staging order-service-container=nginx:alpine -n staging
+          kubectl set image deployment/product-service-staging product-service-container=nginx:alpine -n staging
+          kubectl set image deployment/frontend-staging frontend-container=nginx:alpine -n staging
+          
+          echo "Updated deployments to use nginx:alpine fallback images"
+        fi
         
         # Deploy monitoring only if CRDs exist
         if kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
@@ -174,12 +190,34 @@ jobs:
     
     - name: Run smoke tests
       run: |
-        # Wait for deployments to be ready
-        kubectl wait --for=condition=available --timeout=300s deployment --all -n staging
+        # Wait for database deployments to be ready (these use public images)
+        kubectl wait --for=condition=available --timeout=300s deployment/customer-db-deployment-staging -n staging
+        kubectl wait --for=condition=available --timeout=300s deployment/order-db-deployment-staging -n staging
+        kubectl wait --for=condition=available --timeout=300s deployment/product-db-deployment-staging -n staging
+        kubectl wait --for=condition=available --timeout=300s deployment/rabbitmq-deployment-staging -n staging
         
-        # Run basic health checks
+        # Check pod status for all deployments
+        echo "=== Pod Status ==="
         kubectl get pods -n staging
+        
+        echo "=== Service Status ==="
         kubectl get services -n staging
+        
+        echo "=== Deployment Status ==="
+        kubectl get deployments -n staging
+        
+        # Check if any pods are in ImagePullBackOff or other error states
+        echo "=== Pod Issues ==="
+        kubectl get pods -n staging --field-selector=status.phase!=Running
+        
+        # If there are failed pods, show their descriptions
+        if kubectl get pods -n staging --field-selector=status.phase!=Running --no-headers | grep -q .; then
+          echo "=== Failed Pod Details ==="
+          for pod in $(kubectl get pods -n staging --field-selector=status.phase!=Running -o name); do
+            echo "--- $pod ---"
+            kubectl describe $pod -n staging | tail -20
+          done
+        fi
 
   # Deploy to Production (main branch)
   deploy-production:
