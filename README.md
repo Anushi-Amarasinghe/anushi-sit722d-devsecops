@@ -281,6 +281,13 @@ kubectl port-forward service/sonarqube 9000:9000 -n sonarqube
    - For real SonarQube, ensure adequate cluster resources (2GB+ RAM)
    - Check port forwarding: `kubectl port-forward service/sonarqube 9000:9000 -n sonarqube`
 
+## 📚 Project Documentation
+
+- **[DevSecOps Multi-Stage CI/CD Pipeline Overview](DevSecOps_Multi_Stage_CI_CD_Pipeline_Overview.md)** - Comprehensive technical overview and architecture details
+- **[Video Walkthrough Script](Video_Script_DevSecOps_Walkthrough.md)** - Complete demonstration script for technical presentation
+- **[SonarQube Integration Guide](SONARQUBE_INTEGRATION.md)** - Detailed setup and configuration instructions
+- **[GitHub Secrets Configuration](github-secrets-config.md)** - Repository secrets setup guide
+
 ## 📚 Additional Resources
 
 - [Kubernetes HPA Documentation](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/)
