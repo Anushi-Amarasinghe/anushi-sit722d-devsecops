@@ -305,6 +305,4 @@ kubectl port-forward service/sonarqube 9000:9000 -n sonarqube
 4. Create a pull request to `main`
 5. The CI/CD pipeline will automatically test and deploy
 
-## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
